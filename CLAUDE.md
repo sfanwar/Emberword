@@ -5,7 +5,21 @@
 
 ## What this is
 A mobile word game concept — "Scrabble, but the board burns." Designed in a Claude.ai
-session on 2026-07-06. Status: concept + visual mockup only. Nothing built yet.
+session on 2026-07-06. Status: **playable pilot** (Expo, solo score-attack loop) —
+see "Pilot build" below. Full-blown version (multiplayer, live AI judge) comes next.
+
+## Pilot build (this repo)
+- Expo SDK 57 + TypeScript, `App.tsx` → `src/screens/GameScreen.tsx`.
+- `src/game/` is the pure engine (no RN imports): hex math, letter bag, ENABLE
+  dictionary (2–7 letters, bundled), burn cycle, ash wildcards, forge migration,
+  scoring, plead flow. Tested with node:test — `npm test`; `npm run typecheck`.
+- Pilot rules: solo score attack, 12 rounds × 60s, first word covers center,
+  words along all 3 axes validate, forge ×3 on fresh tile, ×2 for length ≥5.
+- Plead-a-Word uses a local stub judge (`src/game/judge.ts`); the live
+  Anthropic-API judge belongs on a backend (never ship keys in the client) —
+  set `EXPO_PUBLIC_JUDGE_URL` to a POST endpoint returning `{accepted, reasoning}`.
+- Run: `npm install && npm start` (or `npm run web`). Design review page with
+  three theme variants: `design/ember-mockups.html`.
 
 ## Core mechanics (locked in design)
 1. **Hex board** (radius-3 to start) — words read along three axes, not two.
