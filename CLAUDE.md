@@ -13,8 +13,11 @@ see "Pilot build" below. Full-blown version (multiplayer, live AI judge) comes n
 - `src/game/` is the pure engine (no RN imports): hex math, letter bag, ENABLE
   dictionary (2–7 letters, bundled), burn cycle, ash wildcards, forge migration,
   scoring, plead flow. Tested with node:test — `npm test`; `npm run typecheck`.
-- Pilot rules: solo score attack, 12 rounds × 60s, first word covers center,
-  words along all 3 axes validate, forge ×3 on fresh tile, ×2 for length ≥5.
+- Pilot rules: solo score attack with a level ladder (`src/game/levels.ts`) —
+  level 1 is gentle (90s rounds, 5-round burn, low target, 2 pleas); reaching
+  the target clears the level and each next level tightens time/burn/target,
+  endless past the table. First word covers center, words along all 3 axes
+  validate, forge ×3 on fresh tile, ×2 for length ≥5.
 - Plead-a-Word uses a local stub judge (`src/game/judge.ts`); the live
   Anthropic-API judge belongs on a backend (never ship keys in the client) —
   set `EXPO_PUBLIC_JUDGE_URL` to a POST endpoint returning `{accepted, reasoning}`.

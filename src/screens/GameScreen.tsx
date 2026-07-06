@@ -8,7 +8,7 @@ import { HexBoard } from '../components/HexBoard';
 import { PleadModal } from '../components/PleadModal';
 import { Rack } from '../components/Rack';
 import {
-  GameState, MAX_ROUNDS, applyPleaVerdict, newGame, recallAll, skipRound, stage,
+  GameState, applyPleaVerdict, newGame, recallAll, skipRound, stage,
   submit, unstage,
 } from '../game/engine';
 import { Verdict } from '../game/judge';
@@ -16,15 +16,15 @@ import { useTheme } from '../theme/ThemeContext';
 import { Palette } from '../theme/tokens';
 import { GameOverScreen } from './GameOverScreen';
 
-const ROUND_SECONDS = 60;
-
 export function GameScreen() {
   const { t, cycleTheme } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const [state, setState] = useState<GameState>(() => newGame(Date.now() & 0xffffffff));
   const [selected, setSelected] = useState<string | null>(null);
-  const [toast, setToast] = useState<string>('Cover the center hex with your first word');
-  const [secondsLeft, setSecondsLeft] = useState(ROUND_SECONDS);
+  const [toast, setToast] = useState<string>(
+    `Level 1 — score ${state.config.targetScore} to clear. First word covers the center hex`,
+  );
+  const [secondsLeft, setSecondsLeft] = useState(state.config.roundSeconds);
   const [pleading, setPleading] = useState<string | null>(null);
   const roundRef = useRef(state.round);
 
@@ -32,9 +32,9 @@ export function GameScreen() {
   useEffect(() => {
     if (state.round !== roundRef.current) {
       roundRef.current = state.round;
-      setSecondsLeft(ROUND_SECONDS);
+      setSecondsLeft(state.config.roundSeconds);
     }
-  }, [state.round]);
+  }, [state.round, state.config.roundSeconds]);
 
   useEffect(() => {
     if (state.over || pleading) return;
@@ -122,16 +122,23 @@ export function GameScreen() {
     if (!verdict.accepted) setToast('The judge is unmoved — plea spent');
   };
 
+  const startLevel = (levelIndex: number) => {
+    const fresh = newGame(Date.now() & 0xffffffff, levelIndex);
+    roundRef.current = fresh.round;
+    setState(fresh);
+    setSelected(null);
+    setSecondsLeft(fresh.config.roundSeconds);
+    setToast(
+      `Level ${levelIndex + 1} — score ${fresh.config.targetScore} to clear. First word covers the center hex`,
+    );
+  };
+
   if (state.over) {
     return (
       <GameOverScreen
         state={state}
-        onRematch={() => {
-          setState(newGame(Date.now() & 0xffffffff));
-          setSelected(null);
-          setSecondsLeft(ROUND_SECONDS);
-          setToast('Cover the center hex with your first word');
-        }}
+        onNextLevel={() => startLevel(state.levelIndex + 1)}
+        onRetry={() => startLevel(state.levelIndex)}
       />
     );
   }
@@ -142,15 +149,17 @@ export function GameScreen() {
         <View>
           <Text style={styles.pname}>SCORE</Text>
           <Text style={styles.pscore}>{state.score}</Text>
+          <Text style={styles.target}>TARGET {state.config.targetScore}</Text>
         </View>
         <View style={styles.timer}>
           <View style={[styles.timerRing, secondsLeft <= 10 && styles.timerUrgent]}>
             <Text style={styles.timerNum}>
-              0:{String(Math.max(0, secondsLeft)).padStart(2, '0')}
+              {Math.floor(Math.max(0, secondsLeft) / 60)}:
+              {String(Math.max(0, secondsLeft) % 60).padStart(2, '0')}
             </Text>
           </View>
           <Text style={styles.roundLbl}>
-            ROUND {state.round} / {MAX_ROUNDS}
+            LVL {state.levelIndex + 1} · ROUND {state.round} / {state.config.maxRounds}
           </Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
@@ -214,6 +223,7 @@ const makeStyles = (t: Palette) =>
     topbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     pname: { fontSize: 11, color: t.dim, letterSpacing: 1.5 },
     pscore: { fontSize: 22, fontWeight: '800', color: t.amber },
+    target: { fontSize: 9, letterSpacing: 1, color: t.faint, marginTop: 1 },
     timer: { alignItems: 'center' },
     timerRing: {
       width: 48,

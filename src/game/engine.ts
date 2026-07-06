@@ -1,37 +1,37 @@
-// EMBER pilot game engine — solo score-attack loop.
+// EMBER pilot game engine — solo score-attack loop with a level ladder.
 // Pure module (no React Native imports) so it runs under node:test.
 //
 // Pilot rules, per CLAUDE.md mechanics:
 //  * radius-3 board; words read along the three hex axes
-//  * every tile lives 3 rounds (pips), then collapses to ash
+//  * every tile lives `config.burnLifetime` rounds (pips), then collapses to ash
 //  * ash cells are wildcards: they join words as any letter, worth 0 points
 //  * the ×3 forge hex migrates each round toward the coldest region
 //  * pilot scoring: sum of letter values per formed word; ×3 if the word
 //    crosses the forge on a freshly placed tile; ×2 "hex-line" for length ≥5
-//  * 12 rounds, 60s each (timer enforced by the UI, not the engine)
+//  * reach the level's target score before rounds run out to clear the level;
+//    each level is harder (see levels.ts)
 
 import {
   Axial, AXES, CellKey, cellsInRadius, hexDistance, keyOf, lineThrough, neighbors, parseKey,
 } from './hex';
 import { buildBag, RackTile } from './letters';
 import { matchesWord } from './dictionary';
+import { LevelConfig, levelConfig } from './levels';
 
 export const BOARD_RADIUS = 3;
-export const MAX_ROUNDS = 12;
 export const RACK_SIZE = 7;
-export const BURN_LIFETIME = 3;
 
 export interface PlacedTile {
   letter: string;
   value: number;
-  burn: number; // pips remaining, 3 → fresh
+  burn: number; // pips remaining; fresh = config.burnLifetime
   wild: boolean;
 }
 
 export type Cell = { kind: 'tile'; tile: PlacedTile } | { kind: 'ash' };
 
 export interface WordScore {
-  word: string; // as displayed; ash/wild letters shown as '?'/'★' resolved
+  word: string; // as displayed; wild → ★, ash → ✦
   points: number;
   multipliers: string[]; // e.g. ['forge ×3', 'hex-line ×2']
 }
@@ -45,6 +45,8 @@ export interface Stats {
 
 export interface GameState {
   seed: number;
+  levelIndex: number; // 0-based; shown to the player as level 1+
+  config: LevelConfig;
   round: number;
   board: Map<CellKey, Cell>;
   forge: CellKey | null;
@@ -56,7 +58,8 @@ export interface GameState {
   acceptedWords: Set<string>; // plead-approved words, valid for this match
   stats: Stats;
   over: boolean;
-  lastResult: WordScore[] | null; // words scored on the previous forge
+  won: boolean; // over && won → level cleared; over && !won → level failed
+  lastResult: WordScore[] | null;
 }
 
 export type SubmitResult =
@@ -64,10 +67,13 @@ export type SubmitResult =
   | { ok: false; reason: 'no-tiles' | 'not-a-line' | 'gap' | 'first-move-center' | 'disconnected' | 'too-short' }
   | { ok: false; reason: 'invalid-word'; invalidWords: string[] };
 
-export function newGame(seed: number): GameState {
+export function newGame(seed: number, levelIndex = 0): GameState {
   const bag = buildBag(seed);
+  const config = levelConfig(levelIndex);
   return {
     seed,
+    levelIndex,
+    config,
     round: 1,
     board: new Map(),
     forge: keyOf(0, 2), // starting forge, south of center as in the mockup
@@ -75,10 +81,11 @@ export function newGame(seed: number): GameState {
     bag: bag.slice(RACK_SIZE),
     pending: new Map(),
     score: 0,
-    pleasLeft: 1,
+    pleasLeft: config.pleas,
     acceptedWords: new Set(),
     stats: { bestWord: null, tilesBurned: 0, forgeClaims: 0, pleasWon: 0 },
     over: false,
+    won: false,
     lastResult: null,
   };
 }
@@ -247,7 +254,7 @@ export function submit(s: GameState): SubmitResult {
   for (const [key, tile] of next.pending) {
     next.board.set(key, {
       kind: 'tile',
-      tile: { letter: tile.letter, value: tile.value, burn: BURN_LIFETIME, wild: tile.wild },
+      tile: { letter: tile.letter, value: tile.value, burn: next.config.burnLifetime, wild: tile.wild },
     });
   }
   next.pending.clear();
@@ -257,6 +264,13 @@ export function submit(s: GameState): SubmitResult {
   if (!next.stats.bestWord || best.points > next.stats.bestWord.points)
     next.stats.bestWord = { word: best.word, points: best.points };
   next.lastResult = words;
+
+  // Level cleared the moment the target falls.
+  if (next.score >= next.config.targetScore) {
+    next.won = true;
+    next.over = true;
+    return { ok: true, state: next, words };
+  }
 
   next = endRound(next);
   return { ok: true, state: next, words };
@@ -293,8 +307,8 @@ function endRound(s: GameState): GameState {
   }
 
   next.round += 1;
-  if (next.round > MAX_ROUNDS || (next.rack.length === 0 && next.bag.length === 0)) {
-    next.over = true;
+  if (next.round > next.config.maxRounds || (next.rack.length === 0 && next.bag.length === 0)) {
+    next.over = true; // won stays false → level failed
   }
   return next;
 }

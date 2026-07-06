@@ -5,9 +5,10 @@ import { AXES, cellsInRadius, hexDistance, keyOf, lineThrough } from '../hex';
 import { buildBag, RackTile } from '../letters';
 import { matchesWord } from '../dictionary';
 import {
-  BOARD_RADIUS, BURN_LIFETIME, GameState, MAX_ROUNDS, applyPleaVerdict, newGame,
+  BOARD_RADIUS, GameState, applyPleaVerdict, newGame,
   skipRound, stage, submit, unstage,
 } from '../engine';
+import { levelConfig } from '../levels';
 
 // ─── hex math ───
 
@@ -86,7 +87,7 @@ test('a valid first word scores and commits with full burn', () => {
     assert.equal(res.state.round, 2);
     // burn ticks at round end: fresh tiles show lifetime-1 on the next round
     const cell = res.state.board.get('0,0');
-    assert.ok(cell && cell.kind === 'tile' && cell.tile.burn === BURN_LIFETIME - 1);
+    assert.ok(cell && cell.kind === 'tile' && cell.tile.burn === res.state.config.burnLifetime - 1);
   }
 });
 
@@ -154,7 +155,7 @@ test('unstage returns the tile to the rack', () => {
 // ─── burn cycle & ash ───
 
 test('tiles collapse to ash after their burn lifetime', () => {
-  const first = place(withRack(newGame(1), 'ASH'), [
+  const first = place(withRack(newGame(1, 3), 'ASH'), [
     [0, '-1,0'], [1, '0,0'], [2, '1,0'],
   ]);
   const r1 = submit(first);
@@ -169,7 +170,7 @@ test('tiles collapse to ash after their burn lifetime', () => {
 });
 
 test('ash cells act as wildcards in new words', () => {
-  const first = place(withRack(newGame(1), 'ASH'), [
+  const first = place(withRack(newGame(1, 3), 'ASH'), [
     [0, '-1,0'], [1, '0,0'], [2, '1,0'],
   ]);
   const r1 = submit(first);
@@ -222,7 +223,7 @@ test('forge tile triples the word it joins', () => {
 // ─── plead ───
 
 test('plead-accepted words validate on resubmit and consume the plea', () => {
-  const s0 = withRack(newGame(1), 'ZQJXK');
+  const s0 = withRack(newGame(1, 3), 'ZQJXK');
   const s = place(s0, [[0, '-1,0'], [1, '0,0'], [2, '1,0']]);
   const rejected = submit(s);
   assert.equal(rejected.ok, false);
@@ -235,10 +236,34 @@ test('plead-accepted words validate on resubmit and consume the plea', () => {
 
 // ─── game over ───
 
-test('the match ends after MAX_ROUNDS', () => {
+test('the level fails when rounds run out below target', () => {
   let s = newGame(7);
-  for (let i = 0; i < MAX_ROUNDS; i++) s = skipRound(s);
+  for (let i = 0; i < s.config.maxRounds; i++) s = skipRound(s);
   assert.ok(s.over);
+  assert.ok(!s.won);
+});
+
+test('reaching the target score clears the level immediately', () => {
+  const base = newGame(1);
+  const primed: GameState = { ...base, score: base.config.targetScore - 1 };
+  const s = place(withRack(primed, 'ASH'), [
+    [0, '-1,0'], [1, '0,0'], [2, '1,0'],
+  ]);
+  const res = submit(s);
+  assert.ok(res.ok);
+  if (res.ok) {
+    assert.ok(res.state.won, 'level should be cleared');
+    assert.ok(res.state.over);
+  }
+});
+
+test('levels get harder up the ladder and scale endlessly', () => {
+  const l0 = levelConfig(0);
+  const l3 = levelConfig(3);
+  assert.ok(l0.roundSeconds > l3.roundSeconds);
+  assert.ok(l0.burnLifetime > l3.burnLifetime);
+  assert.ok(l0.targetScore < l3.targetScore);
+  assert.ok(levelConfig(10).targetScore > levelConfig(6).targetScore);
 });
 
 test('board never exceeds bounds via stage', () => {

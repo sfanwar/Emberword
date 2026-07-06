@@ -9,7 +9,7 @@ import React from 'react';
 import Svg, { Circle, Defs, G, LinearGradient, Polygon, Stop, Text as SvgText } from 'react-native-svg';
 
 import { axialToPixel, cellsInRadius, hexPoints, keyOf } from '../game/hex';
-import { BOARD_RADIUS, BURN_LIFETIME, GameState } from '../game/engine';
+import { BOARD_RADIUS, GameState } from '../game/engine';
 import { useTheme } from '../theme/ThemeContext';
 
 const TILE_GRADIENT = ['#FF6B2C', '#FFB347'] as const;
@@ -80,15 +80,19 @@ export function HexBoard({ state, onCellPress }: Props) {
               <SvgText x={x + 12} y={y - 6} textAnchor="middle" fontSize={7} fontWeight="700" fill={TILE_INK_SOFT}>
                 {tile.value || ''}
               </SvgText>
-              {Array.from({ length: BURN_LIFETIME }, (_, i) => (
-                <Circle
-                  key={i}
-                  cx={x - 8 + i * 8}
-                  cy={y + 13}
-                  r={2.2}
-                  fill={i < tile.burn ? TILE_INK : PIP_OFF}
-                />
-              ))}
+              {Array.from({ length: state.config.burnLifetime }, (_, i) => {
+                const n = state.config.burnLifetime;
+                const gap = n > 3 ? 6 : 8;
+                return (
+                  <Circle
+                    key={i}
+                    cx={x - ((n - 1) * gap) / 2 + i * gap}
+                    cy={y + 13}
+                    r={n > 3 ? 1.9 : 2.2}
+                    fill={i < tile.burn ? TILE_INK : PIP_OFF}
+                  />
+                );
+              })}
             </G>
           );
         }
