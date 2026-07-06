@@ -1,7 +1,7 @@
 // EMBER pilot — solo score attack. Place a word each 60s round; tiles burn,
 // ash opens wildcards, the forge migrates. 12 rounds; beat your best score.
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { HexBoard } from '../components/HexBoard';
@@ -12,12 +12,15 @@ import {
   submit, unstage,
 } from '../game/engine';
 import { Verdict } from '../game/judge';
-import { theme } from '../theme/tokens';
+import { useTheme } from '../theme/ThemeContext';
+import { Palette } from '../theme/tokens';
 import { GameOverScreen } from './GameOverScreen';
 
 const ROUND_SECONDS = 60;
 
 export function GameScreen() {
+  const { t, cycleTheme } = useTheme();
+  const styles = useMemo(() => makeStyles(t), [t]);
   const [state, setState] = useState<GameState>(() => newGame(Date.now() & 0xffffffff));
   const [selected, setSelected] = useState<string | null>(null);
   const [toast, setToast] = useState<string>('Cover the center hex with your first word');
@@ -35,8 +38,8 @@ export function GameScreen() {
 
   useEffect(() => {
     if (state.over || pleading) return;
-    const t = setInterval(() => setSecondsLeft((s) => s - 1), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setSecondsLeft((s) => s - 1), 1000);
+    return () => clearInterval(timer);
   }, [state.over, pleading]);
 
   useEffect(() => {
@@ -152,7 +155,7 @@ export function GameScreen() {
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.pname}>BAG</Text>
-          <Text style={[styles.pscore, { color: theme.coalLight }]}>{state.bag.length}</Text>
+          <Text style={[styles.pscore, { color: t.coalLight }]}>{state.bag.length}</Text>
         </View>
       </View>
 
@@ -182,9 +185,18 @@ export function GameScreen() {
           <Text style={styles.forgeBtnText}>FORGE ▸</Text>
         </Pressable>
       </View>
-      <Text style={styles.pleaNote}>
-        ⚖ Plead a word: {state.pleasLeft} remaining — offered when the judge rejects your word
-      </Text>
+      <View style={styles.footer}>
+        <Text style={styles.pleaNote}>⚖ Plead a word: {state.pleasLeft} remaining</Text>
+        <Pressable
+          style={styles.themeChip}
+          onPress={cycleTheme}
+          accessibilityRole="button"
+          accessibilityLabel={`Theme: ${t.name} — tap to switch`}
+        >
+          <View style={[styles.themeDot, { backgroundColor: t.ember }]} />
+          <Text style={styles.themeChipText}>{t.name.toUpperCase()}</Text>
+        </Pressable>
+      </View>
 
       <PleadModal
         word={pleading ?? ''}
@@ -196,55 +208,75 @@ export function GameScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.charred, paddingHorizontal: 14, paddingTop: 8 },
-  topbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  pname: { fontSize: 11, color: theme.dim, letterSpacing: 1.5 },
-  pscore: { fontSize: 22, fontWeight: '800', color: theme.amber },
-  timer: { alignItems: 'center' },
-  timerRing: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: theme.ember,
-    borderTopColor: theme.ashDeep,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timerUrgent: { borderColor: '#FF3B30', borderTopColor: '#FF3B30' },
-  timerNum: { fontSize: 13, fontWeight: '700', color: theme.bone },
-  roundLbl: { fontSize: 9, letterSpacing: 2, color: theme.faint, marginTop: 4 },
-  toast: {
-    alignSelf: 'center',
-    backgroundColor: theme.surface2,
-    borderWidth: 1,
-    borderColor: theme.line2,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    marginTop: 10,
-    maxWidth: '95%',
-  },
-  toastText: { fontSize: 12, color: theme.mid, textAlign: 'center' },
-  board: { flex: 1, marginVertical: 6 },
-  actions: { flexDirection: 'row', gap: 8, marginTop: 4 },
-  ghostBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: theme.ash,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  ghostBtnText: { color: theme.mid, fontSize: 12, letterSpacing: 1 },
-  forgeBtn: {
-    flex: 2,
-    backgroundColor: theme.ember,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  forgeBtnText: { color: theme.ink, fontWeight: '800', fontSize: 14, letterSpacing: 1.5 },
-  pleaNote: { fontSize: 10, color: theme.faint, textAlign: 'center', marginVertical: 8 },
-});
+const makeStyles = (t: Palette) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: t.charred, paddingHorizontal: 14, paddingTop: 8 },
+    topbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    pname: { fontSize: 11, color: t.dim, letterSpacing: 1.5 },
+    pscore: { fontSize: 22, fontWeight: '800', color: t.amber },
+    timer: { alignItems: 'center' },
+    timerRing: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      borderWidth: 2,
+      borderColor: t.ember,
+      borderTopColor: t.ashDeep,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    timerUrgent: { borderColor: '#FF3B30', borderTopColor: '#FF3B30' },
+    timerNum: { fontSize: 13, fontWeight: '700', color: t.bone },
+    roundLbl: { fontSize: 9, letterSpacing: 2, color: t.faint, marginTop: 4 },
+    toast: {
+      alignSelf: 'center',
+      backgroundColor: t.surface2,
+      borderWidth: 1,
+      borderColor: t.line2,
+      borderRadius: 20,
+      paddingHorizontal: 14,
+      paddingVertical: 5,
+      marginTop: 10,
+      maxWidth: '95%',
+    },
+    toastText: { fontSize: 12, color: t.mid, textAlign: 'center' },
+    board: { flex: 1, marginVertical: 6 },
+    actions: { flexDirection: 'row', gap: 8, marginTop: 4 },
+    ghostBtn: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: t.ash,
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: 'center',
+    },
+    ghostBtnText: { color: t.mid, fontSize: 12, letterSpacing: 1 },
+    forgeBtn: {
+      flex: 2,
+      backgroundColor: t.ember,
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: 'center',
+    },
+    forgeBtnText: { color: t.ink, fontWeight: '800', fontSize: 14, letterSpacing: 1.5 },
+    footer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginVertical: 8,
+    },
+    pleaNote: { fontSize: 10, color: t.faint },
+    themeChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      borderWidth: 1,
+      borderColor: t.line2,
+      backgroundColor: t.surface2,
+      borderRadius: 14,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+    },
+    themeDot: { width: 8, height: 8, borderRadius: 4 },
+    themeChipText: { fontSize: 9, letterSpacing: 1.5, color: t.dim },
+  });
